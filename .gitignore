@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+*.pyc
+*.db
+.env
+*.pt
+node_modules
+
+node_modules
+.next/
+.env
+*.db
+*.db-journal

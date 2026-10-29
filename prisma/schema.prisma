@@ -1,0 +1,295 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// Enums
+enum Role {
+  ADMIN
+  MANAGER
+  CASHIER
+}
+
+enum Unit {
+  PCS
+  KG
+  BOX
+  LITER
+  METER
+}
+
+enum PaymentStatus {
+  PAID
+  UNPAID
+  PARTIAL
+}
+
+enum PaymentMethod {
+  CASH
+  BANK
+  CARD
+  OTHER
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+// Core Models
+model Business {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  phone     String?
+  email     String?
+  currency  String   @default("USD")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  products  Product[]
+  categories Category[]
+  customers Customer[]
+  suppliers Supplier[]
+  sales     Sale[]
+  purchases Purchase[]
+  expenses  Expense[]
+  accounts  Account[]
+  journalEntries JournalEntry[]
+}
+
+model User {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  name       String?
+  password   String?  // Hashed, or handled by Stack-Auth
+  role       Role     @default(CASHIER)
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  sales      Sale[]
+}
+
+// Inventory Module
+model Category {
+  id         String   @id @default(uuid())
+  name       String
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  products   Product[]
+
+  @@unique([businessId, name])
+}
+
+model Product {
+  id            String   @id @default(uuid())
+  name          String
+  sku           String?
+  barcode       String?
+  description   String?
+  purchasePrice Decimal  @default(0)
+  salePrice     Decimal  @default(0)
+  stock         Int      @default(0)
+  unit          Unit     @default(PCS)
+  isActive      Boolean  @default(true)
+  
+  categoryId    String?
+  category      Category? @relation(fields: [categoryId], references: [id])
+  
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id])
+
+  saleItems     SaleItem[]
+  purchaseItems PurchaseItem[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([businessId, sku])
+  @@unique([businessId, barcode])
+}
+
+// Sales Module
+model Customer {
+  id            String   @id @default(uuid())
+  name          String
+  phone         String?
+  email         String?
+  address       String?
+  creditBalance Decimal  @default(0)
+  
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id])
+  
+  sales         Sale[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Sale {
+  id            String   @id @default(uuid())
+  invoiceNo     String
+  date          DateTime @default(now())
+  totalAmount   Decimal  @default(0)
+  discount      Decimal  @default(0)
+  tax           Decimal  @default(0)
+  netAmount     Decimal  @default(0)
+  paymentMethod PaymentMethod @default(CASH)
+  
+  customerId    String?
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id])
+  
+  items         SaleItem[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([businessId, invoiceNo])
+}
+
+model SaleItem {
+  id        String  @id @default(uuid())
+  saleId    String
+  sale      Sale    @relation(fields: [saleId], references: [id])
+  
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  
+  quantity  Int
+  price     Decimal
+  total     Decimal
+
+  createdAt DateTime @default(now())
+}
+
+// Purchase Module
+model Supplier {
+  id         String   @id @default(uuid())
+  name       String
+  contact    String?
+  email      String?
+  address    String?
+  
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  
+  purchases  Purchase[]
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Purchase {
+  id            String   @id @default(uuid())
+  referenceNo   String?
+  date          DateTime @default(now())
+  totalAmount   Decimal  @default(0)
+  status        PaymentStatus @default(PAID)
+  paymentMethod PaymentMethod @default(CASH)
+  
+  supplierId    String?
+  supplier      Supplier? @relation(fields: [supplierId], references: [id])
+  
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id])
+  
+  items         PurchaseItem[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model PurchaseItem {
+  id         String   @id @default(uuid())
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id])
+  
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  
+  quantity   Int
+  cost       Decimal
+  total      Decimal
+
+  createdAt  DateTime @default(now())
+}
+
+// Expense Module
+model Expense {
+  id          String   @id @default(uuid())
+  description String
+  amount      Decimal
+  date        DateTime @default(now())
+  category    String?  // Or relation to an ExpenseCategory model
+  
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Accounting Module (Simple Double Entry)
+model Account {
+  id          String      @id @default(uuid())
+  name        String
+  type        AccountType
+  code        String?
+  balance     Decimal     @default(0)
+  
+  businessId  String
+  business    Business    @relation(fields: [businessId], references: [id])
+  
+  journalLines JournalLine[]
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([businessId, name])
+  @@unique([businessId, code])
+}
+
+model JournalEntry {
+  id          String   @id @default(uuid())
+  date        DateTime @default(now())
+  description String
+  reference   String?  // e.g., "Sale #123"
+  
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  
+  lines       JournalLine[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model JournalLine {
+  id             String       @id @default(uuid())
+  journalEntryId String
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id])
+  
+  accountId      String
+  account        Account      @relation(fields: [accountId], references: [id])
+  
+  debit          Decimal      @default(0)
+  credit         Decimal      @default(0)
+  
+  createdAt      DateTime     @default(now())
+}
